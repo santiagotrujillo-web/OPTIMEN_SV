@@ -1,4 +1,4 @@
-<!-- V56 HalconII GLB + Vista Cockpit -->
+<!-- V57 HalconII GLB + Vista + Helice -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -29,7 +29,7 @@ canvas { display:block; }
 <div style="color:#aaa;font-family:monospace;font-size:9px;">W/S o arrastrar</div>
 </div>
 <div id="crash-screen" style="display:none;position:absolute;inset:0;background:rgba(180,0,0,0.75);z-index:100;flex-direction:column;align-items:center;justify-content:center;">
-<div style="font-size:64px;">💥</div>
+<div style="font-size:64px;">&#128165;</div>
 <div style="color:#fff;font-family:monospace;font-size:32px;font-weight:bold;margin:10px 0;">CRASH</div>
 <div style="color:#ffcccc;font-family:monospace;font-size:16px;margin-bottom:24px;">El avion fue destruido</div>
 <button onclick="location.reload()" style="background:#fff;color:#cc0000;border:none;border-radius:10px;padding:12px 32px;font-size:18px;font-weight:bold;cursor:pointer;">Reiniciar</button>
@@ -95,10 +95,11 @@ for(var i=0;i<b2Offsets.length;i++){var b=b2Offsets[i];makeBuilding(CX2+b[0],CZ2
 var streets2=[[CX2,CZ2,120,8],[CX2,CZ2,8,160]];for(var i=0;i<streets2.length;i++){var s=new THREE.Mesh(new THREE.PlaneGeometry(streets2[i][2],streets2[i][3]),streetMat);s.rotation.x=-Math.PI/2;s.position.set(streets2[i][0],-0.88,streets2[i][1]);scene.add(s);}
 window._solidBuildings=solidBuildings;
 for(var i=0;i<80;i++){var cl=new THREE.Group();for(var j=0;j<4;j++){var p=new THREE.Mesh(new THREE.SphereGeometry(12+Math.random()*10,12,12),new THREE.MeshPhongMaterial({color:0xffffff,transparent:true,opacity:0.9}));p.position.set((Math.random()-0.5)*25,Math.random()*8,(Math.random()-0.5)*25);cl.add(p);}cl.position.set((Math.random()-0.5)*3500,120+Math.random()*180,-1500+Math.random()*2500);scene.add(cl);}
-// ====== AVION GLB ======
+// ====== AVION GLB + HELICE ======
 var plane=new THREE.Group();plane.position.set(0,0.5,0);scene.add(plane);
+var propeller=null;
 var loader=new THREE.GLTFLoader();
-loader.load('HalconII.glb',function(gltf){var model=gltf.scene;model.scale.set(1.5,1.5,1.5);model.rotation.y=Math.PI;plane.add(model);});
+loader.load('HalconII.glb',function(gltf){var model=gltf.scene;model.scale.set(1.5,1.5,1.5);model.rotation.y=Math.PI;plane.add(model);model.traverse(function(child){if(child.name&&child.name.toLowerCase().indexOf('propeller')>=0){propeller=child;}});});
 // ====== ESTADO Y CONTROLES ======
 var camView=0;
 var state={speed:0,altitude:0.5,pitch:0,yaw:0,throttle:0,fuel:100,crashed:false,prevAlt:0.5};
@@ -135,7 +136,9 @@ var forward=new THREE.Vector3(0,0,-1);forward.applyEuler(new THREE.Euler(0,state
 plane.position.addScaledVector(forward,state.speed*dt*0.014);plane.position.y=state.altitude;
 plane.rotation.set(-state.pitch,state.yaw,keys['ArrowLeft']?0.22:keys['ArrowRight']?-0.22:0,'YXZ');
 updateThrottleHandle();
-// CAMARA - V para cambiar vista
+// HELICE GIRA
+if(propeller){propeller.rotation.y+=dt*(5+state.throttle*40);}
+// CAMARA
 if(camView===1){var cockpitPos=plane.position.clone().add(new THREE.Vector3(0,2.2,0));camera.position.lerp(cockpitPos,0.15);var lookDir=new THREE.Vector3(0,0,-20);lookDir.applyEuler(new THREE.Euler(0,state.yaw,0));camera.lookAt(plane.position.clone().add(lookDir).add(new THREE.Vector3(0,1.5,0)));}else{var back=forward.clone().multiplyScalar(-16);var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));camera.position.lerp(camPos,0.08);camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));}
 camera.fov=65+state.speed*0.015;camera.updateProjectionMatrix();
 spdEl.textContent=Math.round(state.speed);altEl.textContent=Math.round(Math.max(0,(state.altitude-0.5)*10));
