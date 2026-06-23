@@ -57,7 +57,7 @@ var W=window.innerWidth,H=window.innerHeight;
 var canvas=document.getElementById('c');
 var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true});
 renderer.shadowMap.enabled=true;renderer.setSize(W,H);renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;renderer.outputEncoding=THREE.sRGBEncoding;renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-var scene=new THREE.Scene();scene.background=new THREE.Color(0x87CEEB);scene.fog=new THREE.Fog(0x87CEEB,400,1100);
+var scene=new THREE.Scene();scene.background=new THREE.Color(0x87CEEB);scene.fog=new THREE.Fog(0x87CEEB,400,1100);renderer.physicallyCorrectLights=true;
 var camera=new THREE.PerspectiveCamera(65,W/H,0.1,2000);
 var sun=new THREE.DirectionalLight(0xfff5e0,1.2);sun.castShadow=true;sun.position.set(80,120,60);sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;scene.add(sun);
 scene.add(new THREE.AmbientLight(0xaad4f5,0.8));
@@ -104,7 +104,7 @@ var track=document.getElementById('throttle-track');var handle=document.getEleme
 function setThrottleFromY(clientY){var rect=track.getBoundingClientRect();var trackH=rect.height-28;var y=Math.max(0,Math.min(trackH,rect.bottom-14-clientY));state.throttle=y/trackH;updateThrottleHandle();}
 function updateThrottleHandle(){var trackH=track.clientHeight-28;var p=state.throttle*trackH;handle.style.bottom=(4+p)+'px';var pct=Math.round(state.throttle*100);pctEl.textContent=pct+'%';if(pct<50)handle.style.background='linear-gradient(135deg,#4a8,#2a5)';else if(pct<80)handle.style.background='linear-gradient(135deg,#ca4,#863)';else handle.style.background='linear-gradient(135deg,#e44,#922)';}
 track.addEventListener('mousedown',function(e){dragging=true;setThrottleFromY(e.clientY);e.preventDefault();});window.addEventListener('mousemove',function(e){if(dragging)setThrottleFromY(e.clientY);});window.addEventListener('mouseup',function(){dragging=false;});
-track.addEventListener('touchstart',function(e){dragging=true;setThrottleFromY(e.touches[0].clientY);e.preventDefault();},{passive:false});window.addEventListener('touchmove',function(e){if(dragging)setThrottleFromY(e.touches[0].clientY);},{passive:false});window.addEventListener('touchend',function(){dragging=false;});
+track.addEventListener('touchstart',function(e){dragging=true;setThrottleFromY(e.touches[0].clientY);e.preventDefault();},{passive:false});window.addEventListener('touchmove',function(e){if(dragging)setThrottleFromY(e.touches[0].clientY);},{passive:false});window.addEventListener('touchend',function(){dragging=false;});window._camView=0;window.addEventListener('keydown',function(e){if(e.key==='v'||e.key==='V'){window._camView=window._camView===0?1:0;}});
 var keys={};window.addEventListener('keydown',function(e){keys[e.key]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0)e.preventDefault();});window.addEventListener('keyup',function(e){keys[e.key]=false;});
 function bindBtn(id,key){var btn=document.getElementById(id);if(!btn)return;btn.addEventListener('touchstart',function(e){e.preventDefault();keys[key]=true;},{passive:false});btn.addEventListener('touchend',function(e){e.preventDefault();keys[key]=false;},{passive:false});btn.addEventListener('mousedown',function(){keys[key]=true;});btn.addEventListener('mouseup',function(){keys[key]=false;});btn.addEventListener('mouseleave',function(){keys[key]=false;});}
 bindBtn('btn-up','ArrowDown');bindBtn('btn-down','ArrowUp');bindBtn('btn-left','ArrowLeft');bindBtn('btn-right','ArrowRight');
@@ -133,7 +133,8 @@ var forward=new THREE.Vector3(0,0,-1);forward.applyEuler(new THREE.Euler(0,state
 plane.position.addScaledVector(forward,state.speed*dt*0.014);plane.position.y=state.altitude;
 plane.rotation.set(-state.pitch,state.yaw,keys['ArrowLeft']?0.22:keys['ArrowRight']?-0.22:0,'YXZ');
 updateThrottleHandle();
-var back=forward.clone().multiplyScalar(-16);var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));camera.position.lerp(camPos,0.08);camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));camera.fov=65+state.speed*0.015;camera.updateProjectionMatrix();
+if(window._camView===1){var cockpitPos=plane.position.clone().add(new THREE.Vector3(0,2.2,0));camera.position.lerp(cockpitPos,0.15);var lookDir=new THREE.Vector3(0,0,-20);lookDir.applyEuler(new THREE.Euler(0,state.yaw,0));camera.lookAt(plane.position.clone().add(lookDir).add(new THREE.Vector3(0,1.5,0)));}else{var back=forward.clone().multiplyScalar(-16);var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));camera.position.lerp(camPos,0.08);camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));}
+camera.fov=65+state.speed*0.015;camera.updateProjectionMatrix();
 spdEl.textContent=Math.round(state.speed);altEl.textContent=Math.round(Math.max(0,(state.altitude-0.5)*10));
 var airports=[{x:0,z:0},{x:-500,z:-1100},{x:500,z:-1100}];var rep=false;for(var i=0;i<airports.length;i++){var a=airports[i];var d=Math.hypot(plane.position.x-a.x,plane.position.z-a.z);if(d<140&&state.speed<5&&state.altitude<3){state.fuel=Math.min(100,state.fuel+25*dt);rep=true;}}
 fuelEl.textContent='Combustible: '+Math.round(state.fuel)+'%';
