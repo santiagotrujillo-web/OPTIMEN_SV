@@ -1,4 +1,4 @@
-<!-- V55 HalconII GLB -->
+<!-- V56 HalconII GLB + Vista Cockpit -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -35,7 +35,7 @@ canvas { display:block; }
 <button onclick="location.reload()" style="background:#fff;color:#cc0000;border:none;border-radius:10px;padding:12px 32px;font-size:18px;font-weight:bold;cursor:pointer;">Reiniciar</button>
 </div>
 <button onclick="location.reload()" style="position:absolute;top:12px;left:16px;z-index:30;background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:8px;padding:6px 14px;font-family:monospace;font-size:13px;cursor:pointer;">Reiniciar</button>
-<div id="hint">W/S = acelerar/frenar | flecha abajo = sube | flecha arriba = baja | flechas = girar</div>
+<div id="hint">W/S = acelerar/frenar | flechas = control | V = cambiar vista</div>
 <div id="fuel" style="position:absolute;top:52px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#0f0;padding:6px 12px;border-radius:8px;font-family:monospace;z-index:20">Combustible: 100%</div>
 <div id="msg" style="position:absolute;top:85px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#ff0;padding:6px 12px;border-radius:8px;font-family:monospace;z-index:20"></div>
 <div id="touch-controls" style="display:none;position:absolute;right:30px;bottom:30px;z-index:40;flex-direction:column;align-items:center;gap:6px;">
@@ -56,8 +56,8 @@ window.addEventListener('load', function(){
 var W=window.innerWidth,H=window.innerHeight;
 var canvas=document.getElementById('c');
 var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true});
-renderer.shadowMap.enabled=true;renderer.setSize(W,H);renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;renderer.outputEncoding=THREE.sRGBEncoding;renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-var scene=new THREE.Scene();scene.background=new THREE.Color(0x87CEEB);scene.fog=new THREE.Fog(0x87CEEB,400,1100);renderer.physicallyCorrectLights=true;
+renderer.shadowMap.enabled=true;renderer.setSize(W,H);renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;renderer.outputEncoding=THREE.sRGBEncoding;renderer.physicallyCorrectLights=true;renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+var scene=new THREE.Scene();scene.background=new THREE.Color(0x87CEEB);scene.fog=new THREE.Fog(0x87CEEB,400,1100);
 var camera=new THREE.PerspectiveCamera(65,W/H,0.1,2000);
 var sun=new THREE.DirectionalLight(0xfff5e0,1.2);sun.castShadow=true;sun.position.set(80,120,60);sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;scene.add(sun);
 scene.add(new THREE.AmbientLight(0xaad4f5,0.8));
@@ -99,13 +99,15 @@ for(var i=0;i<80;i++){var cl=new THREE.Group();for(var j=0;j<4;j++){var p=new TH
 var plane=new THREE.Group();plane.position.set(0,0.5,0);scene.add(plane);
 var loader=new THREE.GLTFLoader();
 loader.load('HalconII.glb',function(gltf){var model=gltf.scene;model.scale.set(1.5,1.5,1.5);model.rotation.y=Math.PI;plane.add(model);});
+// ====== ESTADO Y CONTROLES ======
+var camView=0;
 var state={speed:0,altitude:0.5,pitch:0,yaw:0,throttle:0,fuel:100,crashed:false,prevAlt:0.5};
 var track=document.getElementById('throttle-track');var handle=document.getElementById('throttle-handle');var pctEl=document.getElementById('throttle-pct');var dragging=false;
 function setThrottleFromY(clientY){var rect=track.getBoundingClientRect();var trackH=rect.height-28;var y=Math.max(0,Math.min(trackH,rect.bottom-14-clientY));state.throttle=y/trackH;updateThrottleHandle();}
 function updateThrottleHandle(){var trackH=track.clientHeight-28;var p=state.throttle*trackH;handle.style.bottom=(4+p)+'px';var pct=Math.round(state.throttle*100);pctEl.textContent=pct+'%';if(pct<50)handle.style.background='linear-gradient(135deg,#4a8,#2a5)';else if(pct<80)handle.style.background='linear-gradient(135deg,#ca4,#863)';else handle.style.background='linear-gradient(135deg,#e44,#922)';}
 track.addEventListener('mousedown',function(e){dragging=true;setThrottleFromY(e.clientY);e.preventDefault();});window.addEventListener('mousemove',function(e){if(dragging)setThrottleFromY(e.clientY);});window.addEventListener('mouseup',function(){dragging=false;});
-track.addEventListener('touchstart',function(e){dragging=true;setThrottleFromY(e.touches[0].clientY);e.preventDefault();},{passive:false});window.addEventListener('touchmove',function(e){if(dragging)setThrottleFromY(e.touches[0].clientY);},{passive:false});window.addEventListener('touchend',function(){dragging=false;});window._camView=0;window.addEventListener('keydown',function(e){if(e.key==='v'||e.key==='V'){window._camView=window._camView===0?1:0;}});
-var keys={};window.addEventListener('keydown',function(e){keys[e.key]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0)e.preventDefault();});window.addEventListener('keyup',function(e){keys[e.key]=false;});
+track.addEventListener('touchstart',function(e){dragging=true;setThrottleFromY(e.touches[0].clientY);e.preventDefault();},{passive:false});window.addEventListener('touchmove',function(e){if(dragging)setThrottleFromY(e.touches[0].clientY);},{passive:false});window.addEventListener('touchend',function(){dragging=false;});
+var keys={};window.addEventListener('keydown',function(e){keys[e.key]=true;if(e.key==='v'||e.key==='V'){camView=camView===0?1:0;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0)e.preventDefault();});window.addEventListener('keyup',function(e){keys[e.key]=false;});
 function bindBtn(id,key){var btn=document.getElementById(id);if(!btn)return;btn.addEventListener('touchstart',function(e){e.preventDefault();keys[key]=true;},{passive:false});btn.addEventListener('touchend',function(e){e.preventDefault();keys[key]=false;},{passive:false});btn.addEventListener('mousedown',function(){keys[key]=true;});btn.addEventListener('mouseup',function(){keys[key]=false;});btn.addEventListener('mouseleave',function(){keys[key]=false;});}
 bindBtn('btn-up','ArrowDown');bindBtn('btn-down','ArrowUp');bindBtn('btn-left','ArrowLeft');bindBtn('btn-right','ArrowRight');
 var spdEl=document.getElementById('spd');var altEl=document.getElementById('alt');var fuelEl=document.getElementById('fuel');var msgEl=document.getElementById('msg');var radar=document.getElementById('radar');var rctx=radar.getContext('2d');var gauges=document.getElementById('gauges');var gctx=gauges?gauges.getContext('2d'):null;
@@ -133,16 +135,17 @@ var forward=new THREE.Vector3(0,0,-1);forward.applyEuler(new THREE.Euler(0,state
 plane.position.addScaledVector(forward,state.speed*dt*0.014);plane.position.y=state.altitude;
 plane.rotation.set(-state.pitch,state.yaw,keys['ArrowLeft']?0.22:keys['ArrowRight']?-0.22:0,'YXZ');
 updateThrottleHandle();
-if(window._camView===1){var cockpitPos=plane.position.clone().add(new THREE.Vector3(0,2.2,0));camera.position.lerp(cockpitPos,0.15);var lookDir=new THREE.Vector3(0,0,-20);lookDir.applyEuler(new THREE.Euler(0,state.yaw,0));camera.lookAt(plane.position.clone().add(lookDir).add(new THREE.Vector3(0,1.5,0)));}else{var back=forward.clone().multiplyScalar(-16);var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));camera.position.lerp(camPos,0.08);camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));}
+// CAMARA - V para cambiar vista
+if(camView===1){var cockpitPos=plane.position.clone().add(new THREE.Vector3(0,2.2,0));camera.position.lerp(cockpitPos,0.15);var lookDir=new THREE.Vector3(0,0,-20);lookDir.applyEuler(new THREE.Euler(0,state.yaw,0));camera.lookAt(plane.position.clone().add(lookDir).add(new THREE.Vector3(0,1.5,0)));}else{var back=forward.clone().multiplyScalar(-16);var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));camera.position.lerp(camPos,0.08);camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));}
 camera.fov=65+state.speed*0.015;camera.updateProjectionMatrix();
 spdEl.textContent=Math.round(state.speed);altEl.textContent=Math.round(Math.max(0,(state.altitude-0.5)*10));
-var airports=[{x:0,z:0},{x:-500,z:-1100},{x:500,z:-1100}];var rep=false;for(var i=0;i<airports.length;i++){var a=airports[i];var d=Math.hypot(plane.position.x-a.x,plane.position.z-a.z);if(d<140&&state.speed<5&&state.altitude<3){state.fuel=Math.min(100,state.fuel+25*dt);rep=true;}}
+var airports=[{x:0,z:0},{x:-500,z:-1100},{x:500,z:-1100}];var rep=false;for(var i=0;i<airports.length;i++){var a=airports[i];var d2=Math.hypot(plane.position.x-a.x,plane.position.z-a.z);if(d2<140&&state.speed<5&&state.altitude<3){state.fuel=Math.min(100,state.fuel+25*dt);rep=true;}}
 fuelEl.textContent='Combustible: '+Math.round(state.fuel)+'%';
 if(rep){msgEl.textContent='REPOSTANDO...';}else if(state.fuel<15){msgEl.textContent='COMBUSTIBLE BAJO';}else if(state.fuel<=0&&state.altitude>3){msgEl.textContent='PLANEANDO';}else{msgEl.textContent='';}
 rctx.clearRect(0,0,180,180);rctx.strokeStyle='#00ff66';rctx.beginPath();rctx.arc(90,90,85,0,Math.PI*2);rctx.stroke();
-var scale=0.05;function mark(x,z,c){var dx2=(x-plane.position.x)*scale;var dz2=(z-plane.position.z)*scale;if(Math.hypot(dx2,dz2)<80){rctx.fillStyle=c;rctx.beginPath();rctx.arc(90+dx2,90+dz2,4,0,6.28);rctx.fill();}}
+var scale=0.05;function mark(x,z,c){var mdx=(x-plane.position.x)*scale;var mdz=(z-plane.position.z)*scale;if(Math.hypot(mdx,mdz)<80){rctx.fillStyle=c;rctx.beginPath();rctx.arc(90+mdx,90+mdz,4,0,6.28);rctx.fill();}}
 mark(0,0,'yellow');mark(-500,-1100,'yellow');mark(500,-1100,'yellow');rctx.fillStyle='red';rctx.beginPath();rctx.arc(90,90,5,0,6.28);rctx.fill();
-if(gctx){gctx.clearRect(0,0,260,180);gctx.strokeStyle='white';gctx.fillStyle='white';gctx.beginPath();gctx.arc(70,75,45,0,Math.PI*2);gctx.stroke();gctx.fillText('VEL',58,20);var sp=Math.min(800,state.speed||0);var ang=(-140+(sp/800)*280)*Math.PI/180;gctx.beginPath();gctx.moveTo(70,75);gctx.lineTo(70+35*Math.cos(ang),75+35*Math.sin(ang));gctx.stroke();gctx.fillText(Math.round(sp)+' km/h',40,132);gctx.strokeRect(170,20,25,95);var alt=Math.max(0,Math.min(1000,state.altitude||0));var yg=115-(alt/1000)*95;gctx.fillRect(170,yg,25,4);gctx.fillText('ALT',165,15);gctx.fillText(Math.round(alt)+'m',150,132);var fuel=Math.max(0,Math.min(100,state.fuel));gctx.fillStyle='white';gctx.fillText('FUEL',20,160);gctx.strokeRect(60,150,120,12);var fw=(fuel/100)*120;if(fuel>50)gctx.fillStyle='#00ff66';else if(fuel>20)gctx.fillStyle='#ffcc00';else gctx.fillStyle='#ff4444';gctx.fillRect(60,150,fw,12);gctx.fillStyle='white';gctx.fillText(Math.round(fuel)+'%',190,160);}
+if(gctx){gctx.clearRect(0,0,260,180);gctx.strokeStyle='white';gctx.fillStyle='white';gctx.beginPath();gctx.arc(70,75,45,0,Math.PI*2);gctx.stroke();gctx.fillText('VEL',58,20);var sp=Math.min(800,state.speed||0);var ang=(-140+(sp/800)*280)*Math.PI/180;gctx.beginPath();gctx.moveTo(70,75);gctx.lineTo(70+35*Math.cos(ang),75+35*Math.sin(ang));gctx.stroke();gctx.fillText(Math.round(sp)+' km/h',40,132);gctx.strokeRect(170,20,25,95);var alt2=Math.max(0,Math.min(1000,state.altitude||0));var yg=115-(alt2/1000)*95;gctx.fillRect(170,yg,25,4);gctx.fillText('ALT',165,15);gctx.fillText(Math.round(alt2)+'m',150,132);var fuel=Math.max(0,Math.min(100,state.fuel));gctx.fillStyle='white';gctx.fillText('FUEL',20,160);gctx.strokeRect(60,150,120,12);var fw=(fuel/100)*120;if(fuel>50)gctx.fillStyle='#00ff66';else if(fuel>20)gctx.fillStyle='#ffcc00';else gctx.fillStyle='#ff4444';gctx.fillRect(60,150,fw,12);gctx.fillStyle='white';gctx.fillText(Math.round(fuel)+'%',190,160);}
 renderer.render(scene,camera);}
 animate();
 });
@@ -153,5 +156,3 @@ animate();
 </script>
 </body>
 </html>
-
-
