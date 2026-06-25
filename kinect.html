@@ -218,7 +218,7 @@ plane.position.addScaledVector(forward,state.speed*dt*0.014);plane.position.y=st
 plane.rotation.set(-state.pitch,state.yaw,keys['ArrowLeft']?0.22:keys['ArrowRight']?-0.22:bodyControl.detected?-bodyControl.roll*0.3:0,'YXZ');
 updateThrottleHandle();
 // HELICE GIRA
-if(propeller){propeller.rotation.x+=dt*(5+state.throttle*40);}
+if(propeller){propeller.rotateOnAxis(new THREE.Vector3(0,0,1),dt*(5+state.throttle*40));}
 // CAMARA
 if(camView===1){var cockpitPos=plane.position.clone().add(new THREE.Vector3(0,2.2,0));camera.position.lerp(cockpitPos,0.15);var lookDir=new THREE.Vector3(0,0,-20);lookDir.applyEuler(new THREE.Euler(0,state.yaw,0));camera.lookAt(plane.position.clone().add(lookDir).add(new THREE.Vector3(0,1.5,0)));}else{var back=forward.clone().multiplyScalar(-16);var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));camera.position.lerp(camPos,0.08);camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));}
 camera.fov=65+state.speed*0.015;camera.updateProjectionMatrix();
