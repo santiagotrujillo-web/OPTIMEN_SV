@@ -1,4 +1,4 @@
-<!-- Simulador Halcon II - Control por Webcam/Kinect -->
+<!-- Simulador Halcon II - Control Corporal v2 - Calibrado -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -12,10 +12,23 @@ canvas { display:block; }
 #webcam-container { position:absolute;top:60px;left:10px;z-index:50;border:2px solid #0f0;border-radius:8px;overflow:hidden;opacity:0.8; }
 #webcam-container video { width:160px;height:120px;transform:scaleX(-1); }
 #webcam-container canvas { width:160px;height:120px;position:absolute;top:0;left:0;transform:scaleX(-1); }
-#body-status { position:absolute;top:185px;left:10px;z-index:50;background:rgba(0,0,0,0.7);color:#0f0;padding:6px 10px;border-radius:6px;font-family:monospace;font-size:11px; }
+#body-status { position:absolute;top:185px;left:10px;z-index:50;background:rgba(0,0,0,0.7);color:#0f0;padding:6px 10px;border-radius:6px;font-family:monospace;font-size:11px;max-width:200px; }
+#calibration-screen { position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:monospace; }
+#calibration-screen h2 { font-size:28px;margin-bottom:10px; }
+#calibration-screen p { font-size:16px;color:#aaa;margin:5px; }
+#cal-timer { font-size:64px;color:#0f0;margin:20px; }
+#cal-status { font-size:14px;color:#ff0; }
 </style>
 </head>
 <body>
+<div id="calibration-screen">
+<h2>CALIBRACION</h2>
+<p>Parate recto frente a la camara</p>
+<p>Brazos a los lados, mirando al frente</p>
+<div id="cal-timer">3</div>
+<div id="cal-status">Esperando camara...</div>
+<button id="cal-skip" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;background:#333;color:#fff;border:1px solid #666;border-radius:8px;">Saltar (usar teclado)</button>
+</div>
 <div id="info">Velocidad: <span id="spd">0</span> km/h &nbsp;|&nbsp; Altitud: <span id="alt">0</span> m</div>
 <div style="position:absolute;top:12px;right:16px;z-index:20;pointer-events:none;color:#ffffff;font-family:Arial Black,Arial;font-size:20px;font-weight:900;letter-spacing:2px;text-shadow:0 0 6px rgba(0,0,0,0.8);">OPTIMEN</div>
 <div id="throttle-panel" style="position:absolute;right:20px;top:50%;transform:translateY(-50%);z-index:30;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:auto;">
@@ -30,7 +43,7 @@ canvas { display:block; }
 <div id="throttle-handle" style="position:absolute;left:50%;transform:translateX(-50%);bottom:4px;width:28px;height:28px;background:linear-gradient(135deg,#888,#444);border:2px solid #aaa;border-radius:6px;cursor:grab;box-shadow:0 2px 8px rgba(0,0,0,0.7);transition:background 0.2s;"></div>
 </div>
 <div id="throttle-pct" style="color:#0f0;font-family:monospace;font-size:13px;font-weight:bold;text-shadow:0 0 6px #0f0;">0%</div>
-<div style="color:#aaa;font-family:monospace;font-size:9px;">W/S o mano</div>
+<div style="color:#aaa;font-family:monospace;font-size:9px;">Mano o W/S</div>
 </div>
 <div id="crash-screen" style="display:none;position:absolute;inset:0;background:rgba(180,0,0,0.75);z-index:100;flex-direction:column;align-items:center;justify-content:center;">
 <div style="font-size:64px;">&#128165;</div>
@@ -39,11 +52,11 @@ canvas { display:block; }
 <button onclick="location.reload()" style="background:#fff;color:#cc0000;border:none;border-radius:10px;padding:12px 32px;font-size:18px;font-weight:bold;cursor:pointer;">Reiniciar</button>
 </div>
 <button onclick="location.reload()" style="position:absolute;top:12px;left:16px;z-index:30;background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:8px;padding:6px 14px;font-family:monospace;font-size:13px;cursor:pointer;">Reiniciar</button>
-<div id="hint">Inclinate para girar | Mano derecha arriba = potencia | V = vista | Teclado tambien funciona</div>
+<div id="hint">Cuerpo = direccion | Mano arriba/abajo = potencia | V = vista | Teclado tambien</div>
 <div id="fuel" style="position:absolute;top:52px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#0f0;padding:6px 12px;border-radius:8px;font-family:monospace;z-index:20">Combustible: 100%</div>
 <div id="msg" style="position:absolute;top:85px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#ff0;padding:6px 12px;border-radius:8px;font-family:monospace;z-index:20"></div>
 <div id="webcam-container"><video id="webcam" autoplay playsinline></video><canvas id="pose-canvas" width="160" height="120"></canvas></div>
-<div id="body-status">Cuerpo: No detectado</div>
+<div id="body-status">Cuerpo: Calibrando...</div>
 <canvas id="radar" width="180" height="180" style="position:absolute;right:15px;bottom:15px;border:2px solid #0f0;border-radius:50%;background:rgba(0,0,0,.65);z-index:20"></canvas>
 <canvas id="gauges" width="260" height="180" style="position:absolute;left:15px;bottom:220px;background:rgba(0,0,0,.65);border-radius:12px;z-index:25"></canvas>
 <canvas id="c"></canvas>
@@ -52,78 +65,124 @@ canvas { display:block; }
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 <script>
-// === DETECCION DE CUERPO CON WEBCAM ===
-var bodyControl = {roll:0, pitch:0, throttle:0, detected:false};
-var poseDetector = null;
-var webcamVideo = document.getElementById('webcam');
-var poseCanvas = document.getElementById('pose-canvas');
-var poseCtx = poseCanvas.getContext('2d');
-var bodyStatus = document.getElementById('body-status');
+// === CALIBRACION Y DETECCION ===
+var bodyControl={roll:0,pitch:0,throttle:0,detected:false};
+var calibration={done:false,shoulderY:0,noseY:0,noseX:0,hipY:0,headY:0};
+var calSamples=[];
+var calCountdown=3;
+var poseDetector=null;
+var webcamVideo=document.getElementById('webcam');
+var poseCanvas=document.getElementById('pose-canvas');
+var poseCtx=poseCanvas.getContext('2d');
+var bodyStatus=document.getElementById('body-status');
+var calScreen=document.getElementById('calibration-screen');
+var calTimer=document.getElementById('cal-timer');
+var calStatus=document.getElementById('cal-status');
+var currentThrottle=0;
+
+document.getElementById('cal-skip').addEventListener('click',function(){
+  calibration.done=true;calScreen.style.display='none';
+});
 
 async function setupCamera(){
-  var stream = await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'}});
-  webcamVideo.srcObject = stream;
+  var stream=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'}});
+  webcamVideo.srcObject=stream;
   return new Promise(function(resolve){webcamVideo.onloadedmetadata=function(){resolve();};});
 }
 
 async function setupPoseDetection(){
   await setupCamera();
-  var model = poseDetection.SupportedModels.MoveNet;
-  var detectorConfig = {modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING};
-  poseDetector = await poseDetection.createDetector(model, detectorConfig);
-  detectPose();
+  calStatus.textContent='Camara lista. Preparate...';
+  var model=poseDetection.SupportedModels.MoveNet;
+  var detectorConfig={modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING};
+  poseDetector=await poseDetection.createDetector(model,detectorConfig);
+  // Countdown calibracion
+  var calStart=Date.now();
+  calStatus.textContent='Quedate quieto...';
+  detectPose(calStart);
 }
 
-async function detectPose(){
+async function detectPose(calStart){
   if(!poseDetector)return;
   try{
-    var poses = await poseDetector.estimatePoses(webcamVideo);
-    if(poses.length>0 && poses[0].keypoints){
-      var kp = poses[0].keypoints;
-      var leftShoulder = kp[5];
-      var rightShoulder = kp[6];
-      var nose = kp[0];
-      var rightWrist = kp[10];
-      if(leftShoulder.score>0.3 && rightShoulder.score>0.3){
-        bodyControl.detected = true;
-        // Roll: diferencia de altura entre hombros
-        var shoulderDiff = (leftShoulder.y - rightShoulder.y) / 80;
-        bodyControl.roll = Math.max(-1, Math.min(1, shoulderDiff));
-        // Pitch: posicion vertical de la nariz
-        if(nose.score>0.3){
-          var nosePitch = (nose.y - 120) / 100;
-          bodyControl.pitch = Math.max(-1, Math.min(1, nosePitch));
-        }
-        // Throttle: altura de mano derecha (mas arriba = mas potencia)
-        if(rightWrist.score>0.3){
-          var handHeight = 1 - (rightWrist.y / 240);
-          bodyControl.throttle = Math.max(0, Math.min(1, handHeight));
-        }
-        bodyStatus.textContent = 'Cuerpo: OK | Roll:'+bodyControl.roll.toFixed(1)+' Pitch:'+bodyControl.pitch.toFixed(1)+' Throttle:'+Math.round(bodyControl.throttle*100)+'%';
-        bodyStatus.style.color = '#0f0';
-        // Dibujar puntos en canvas
-        poseCtx.clearRect(0,0,160,120);
-        poseCtx.fillStyle='#0f0';
-        for(var i=0;i<kp.length;i++){
-          if(kp[i].score>0.3){
-            poseCtx.beginPath();
-            poseCtx.arc(kp[i].x/2, kp[i].y/2, 3, 0, 6.28);
-            poseCtx.fill();
+    var poses=await poseDetector.estimatePoses(webcamVideo);
+    if(poses.length>0&&poses[0].keypoints){
+      var kp=poses[0].keypoints;
+      var leftShoulder=kp[5];var rightShoulder=kp[6];
+      var nose=kp[0];var rightWrist=kp[10];var leftHip=kp[11];var rightHip=kp[12];
+      // CALIBRACION
+      if(!calibration.done){
+        var elapsed=(Date.now()-calStart)/1000;
+        var remaining=Math.max(0,3-Math.floor(elapsed));
+        calTimer.textContent=remaining;
+        if(leftShoulder.score>0.3&&rightShoulder.score>0.3&&nose.score>0.3){
+          calStatus.textContent='Te veo! Quedate quieto...';
+          calStatus.style.color='#0f0';
+          if(elapsed>=2){
+            calSamples.push({
+              shoulderY:(leftShoulder.y+rightShoulder.y)/2,
+              noseY:nose.y,noseX:nose.x,
+              hipY:(leftHip.score>0.3&&rightHip.score>0.3)?(leftHip.y+rightHip.y)/2:180,
+              headY:nose.y-30
+            });
           }
+          if(elapsed>=3&&calSamples.length>=5){
+            // Promediar
+            var sum={shoulderY:0,noseY:0,noseX:0,hipY:0,headY:0};
+            for(var i=0;i<calSamples.length;i++){sum.shoulderY+=calSamples[i].shoulderY;sum.noseY+=calSamples[i].noseY;sum.noseX+=calSamples[i].noseX;sum.hipY+=calSamples[i].hipY;sum.headY+=calSamples[i].headY;}
+            calibration.shoulderY=sum.shoulderY/calSamples.length;
+            calibration.noseY=sum.noseY/calSamples.length;
+            calibration.noseX=sum.noseX/calSamples.length;
+            calibration.hipY=sum.hipY/calSamples.length;
+            calibration.headY=sum.headY/calSamples.length;
+            calibration.done=true;
+            calScreen.style.display='none';
+          }
+        }else{
+          calStatus.textContent='No te veo... acercate';
+          calStatus.style.color='#f44';
         }
-      } else {
-        bodyControl.detected = false;
-        bodyStatus.textContent = 'Cuerpo: No detectado';
-        bodyStatus.style.color = '#f44';
       }
+      // CONTROL NORMAL
+      if(calibration.done&&leftShoulder.score>0.3&&rightShoulder.score>0.3){
+        bodyControl.detected=true;
+        // Roll: diferencia de hombros relativa a calibracion
+        var shoulderDiff=(leftShoulder.y-rightShoulder.y)/60;
+        bodyControl.roll=Math.max(-1,Math.min(1,shoulderDiff));
+        // Pitch: nariz relativa a posicion calibrada
+        if(nose.score>0.3){
+          var pitchDiff=(nose.y-calibration.noseY)/80;
+          bodyControl.pitch=Math.max(-1,Math.min(1,pitchDiff));
+        }
+        // Throttle: gesto de mano derecha
+        if(rightWrist.score>0.3){
+          if(rightWrist.y<calibration.headY){
+            // Mano arriba de la cabeza = sube potencia
+            currentThrottle=Math.min(1,currentThrottle+0.02);
+          }else if(rightWrist.y>calibration.hipY){
+            // Mano abajo de la cintura = baja potencia
+            currentThrottle=Math.max(0,currentThrottle-0.02);
+          }
+          // En medio = no cambia
+        }
+        bodyControl.throttle=currentThrottle;
+        bodyStatus.textContent='OK | Giro:'+bodyControl.roll.toFixed(1)+' Pitch:'+bodyControl.pitch.toFixed(1)+' Pot:'+Math.round(currentThrottle*100)+'%';
+        bodyStatus.style.color='#0f0';
+      }else if(calibration.done){
+        bodyControl.detected=false;
+        bodyStatus.textContent='No te veo';
+        bodyStatus.style.color='#f44';
+      }
+      // Dibujar puntos
+      poseCtx.clearRect(0,0,160,120);poseCtx.fillStyle='#0f0';
+      for(var i=0;i<kp.length;i++){if(kp[i].score>0.3){poseCtx.beginPath();poseCtx.arc(kp[i].x/2,kp[i].y/2,3,0,6.28);poseCtx.fill();}}
     }
   }catch(e){}
-  requestAnimationFrame(detectPose);
+  requestAnimationFrame(function(){detectPose(calStart);});
 }
 
 setupPoseDetection().catch(function(e){
-  bodyStatus.textContent = 'Webcam: Error - '+e.message;
-  bodyStatus.style.color = '#f44';
+  calStatus.textContent='Error: '+e.message;calStatus.style.color='#f44';
 });
 // === SIMULADOR 3D ===
 window.addEventListener('load', function(){
@@ -169,7 +228,7 @@ for(var i=0;i<b2Offsets.length;i++){var b=b2Offsets[i];makeBuilding(CX2+b[0],CZ2
 var streets2=[[CX2,CZ2,120,8],[CX2,CZ2,8,160]];for(var i=0;i<streets2.length;i++){var s=new THREE.Mesh(new THREE.PlaneGeometry(streets2[i][2],streets2[i][3]),streetMat);s.rotation.x=-Math.PI/2;s.position.set(streets2[i][0],-0.88,streets2[i][1]);scene.add(s);}
 window._solidBuildings=solidBuildings;
 for(var i=0;i<80;i++){var cl=new THREE.Group();for(var j=0;j<4;j++){var p=new THREE.Mesh(new THREE.SphereGeometry(12+Math.random()*10,12,12),new THREE.MeshPhongMaterial({color:0xffffff,transparent:true,opacity:0.9}));p.position.set((Math.random()-0.5)*25,Math.random()*8,(Math.random()-0.5)*25);cl.add(p);}cl.position.set((Math.random()-0.5)*3500,120+Math.random()*180,-1500+Math.random()*2500);scene.add(cl);}
-// ====== AVION GLB + HELICE ======
+// ====== AVION GLB ======
 var plane=new THREE.Group();plane.position.set(0,0.5,0);scene.add(plane);
 var propeller=null;
 var loader=new THREE.GLTFLoader();
@@ -178,7 +237,7 @@ loader.load('HalconII.glb',function(gltf){var model=gltf.scene;model.scale.set(1
 var camView=0;
 var state={speed:0,altitude:0.5,pitch:0,yaw:0,throttle:0,fuel:100,crashed:false,prevAlt:0.5};
 var track=document.getElementById('throttle-track');var handle=document.getElementById('throttle-handle');var pctEl=document.getElementById('throttle-pct');var dragging=false;
-function setThrottleFromY(clientY){var rect=track.getBoundingClientRect();var trackH=rect.height-28;var y=Math.max(0,Math.min(trackH,rect.bottom-14-clientY));state.throttle=y/trackH;updateThrottleHandle();}
+function setThrottleFromY(clientY){var rect=track.getBoundingClientRect();var trackH=rect.height-28;var y=Math.max(0,Math.min(trackH,rect.bottom-14-clientY));state.throttle=y/trackH;currentThrottle=state.throttle;updateThrottleHandle();}
 function updateThrottleHandle(){var trackH=track.clientHeight-28;var p=state.throttle*trackH;handle.style.bottom=(4+p)+'px';var pct=Math.round(state.throttle*100);pctEl.textContent=pct+'%';if(pct<50)handle.style.background='linear-gradient(135deg,#4a8,#2a5)';else if(pct<80)handle.style.background='linear-gradient(135deg,#ca4,#863)';else handle.style.background='linear-gradient(135deg,#e44,#922)';}
 track.addEventListener('mousedown',function(e){dragging=true;setThrottleFromY(e.clientY);e.preventDefault();});window.addEventListener('mousemove',function(e){if(dragging)setThrottleFromY(e.clientY);});window.addEventListener('mouseup',function(){dragging=false;});
 track.addEventListener('touchstart',function(e){dragging=true;setThrottleFromY(e.touches[0].clientY);e.preventDefault();},{passive:false});window.addEventListener('touchmove',function(e){if(dragging)setThrottleFromY(e.touches[0].clientY);},{passive:false});window.addEventListener('touchend',function(){dragging=false;});
@@ -190,15 +249,15 @@ var clock=new THREE.Clock();
 function getTerrainHeight(wx,wz){for(var i=0;i<lakeZones.length;i++){var l=lakeZones[i];var dx=(wx-l.x)/l.rx,dz=(wz-l.z)/l.rz;if(dx*dx+dz*dz<1.0)return-2.5;}if(Math.abs(wx)<250&&wz>-220&&wz<220)return-1;if(Math.abs(wx+700)<280&&wz>-1280&&wz<-880)return-1;if(Math.abs(wx-700)<280&&wz>-1280&&wz<-880)return-1;var mh=mountainHeight(wx,wz);var nh=noise(wx,wz,0.008,8)+noise(wx,wz,0.02,3);return mh+nh-1;}
 function animate(){requestAnimationFrame(animate);var dt=Math.min(clock.getDelta(),0.05);
 if(state.crashed)return;
-// CONTROL POR WEBCAM/KINECT
+// CONTROL POR WEBCAM
 if(bodyControl.detected){
-  state.yaw += bodyControl.roll * dt * 2.0;
-  state.pitch = bodyControl.pitch * 0.4;
-  state.throttle = bodyControl.throttle;
+  state.yaw+=bodyControl.roll*dt*2.0;
+  state.pitch=bodyControl.pitch*0.4;
+  state.throttle=bodyControl.throttle;
 }
-// CONTROL POR TECLADO (tambien funciona)
-if(keys['w']||keys['W'])state.throttle=Math.min(1,state.throttle+dt*1.5);
-if(keys['s']||keys['S'])state.throttle=Math.max(0,state.throttle-dt*1.5);
+// CONTROL POR TECLADO
+if(keys['w']||keys['W']){state.throttle=Math.min(1,state.throttle+dt*1.5);currentThrottle=state.throttle;}
+if(keys['s']||keys['S']){state.throttle=Math.max(0,state.throttle-dt*1.5);currentThrottle=state.throttle;}
 if(state.fuel>0){state.fuel=Math.max(0,state.fuel-state.throttle*dt*0.8);}else{state.throttle=0;}
 if(keys['ArrowLeft'])state.yaw+=dt*1.8;if(keys['ArrowRight'])state.yaw-=dt*1.8;
 if(keys['ArrowDown'])state.pitch=Math.max(-0.45,state.pitch-dt*0.7);
@@ -215,9 +274,10 @@ state.altitude=Math.max(groundH,state.altitude);
 if(window._solidBuildings){for(var i=0;i<window._solidBuildings.length;i++){var b=window._solidBuildings[i];var dx=Math.abs(plane.position.x-b.x);var dz=Math.abs(plane.position.z-b.z);var hw=(b.w||15)/2+2,hd=(b.d||15)/2+2;if(dx<hw&&dz<hd){var topH=b.h||20;if(state.altitude<topH+0.5){if(topH<2){if(vertSpeed<-7){state.crashed=true;state.speed=0;state.throttle=0;state.fuel=0;var cs=document.getElementById('crash-screen');if(cs)cs.style.display='flex';}else{state.altitude=topH+0.5;if(vertSpeed<-3){if(msgEl)msgEl.textContent='ATERRIZAJE DURO';state.speed*=0.75;}else{if(msgEl)msgEl.textContent='ATERRIZAJE SUAVE';}if(state.altitude<=1.5){state.speed=Math.max(0,state.speed-dt*120);}}}else{if(state.speed>80){state.crashed=true;state.speed=0;state.throttle=0;state.pitch=0;state.fuel=0;var cs=document.getElementById('crash-screen');if(cs)cs.style.display='flex';}else{state.altitude=topH+0.5;state.speed*=0.2;state.pitch=0;}}}}}}
 var forward=new THREE.Vector3(0,0,-1);forward.applyEuler(new THREE.Euler(0,state.yaw,0));
 plane.position.addScaledVector(forward,state.speed*dt*0.014);plane.position.y=state.altitude;
-plane.rotation.set(-state.pitch,state.yaw,keys['ArrowLeft']?0.22:keys['ArrowRight']?-0.22:bodyControl.detected?-bodyControl.roll*0.3:0,'YXZ');
+var visualRoll=keys['ArrowLeft']?0.22:keys['ArrowRight']?-0.22:bodyControl.detected?-bodyControl.roll*0.3:0;
+plane.rotation.set(-state.pitch,state.yaw,visualRoll,'YXZ');
 updateThrottleHandle();
-// HELICE GIRA
+// HELICE
 if(propeller){propeller.rotateOnAxis(new THREE.Vector3(0,0,1),dt*(5+state.throttle*40));}
 // CAMARA
 if(camView===1){var cockpitPos=plane.position.clone().add(new THREE.Vector3(0,2.2,0));camera.position.lerp(cockpitPos,0.15);var lookDir=new THREE.Vector3(0,0,-20);lookDir.applyEuler(new THREE.Euler(0,state.yaw,0));camera.lookAt(plane.position.clone().add(lookDir).add(new THREE.Vector3(0,1.5,0)));}else{var back=forward.clone().multiplyScalar(-16);var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));camera.position.lerp(camPos,0.08);camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));}
