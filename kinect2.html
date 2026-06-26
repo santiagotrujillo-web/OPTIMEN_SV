@@ -1,0 +1,614 @@
+<!-- Simulador Halcon II - Panel Virtual v1 -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Simulador Halcon II - Panel Virtual - Optimen</title>
+<style>
+body { margin:0; overflow:hidden; background:#000; }
+#info { position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:8px 18px;border-radius:8px;font-family:monospace;font-size:14px;z-index:10;pointer-events:none;white-space:nowrap; }
+#hint { position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#ddd;padding:6px 16px;border-radius:8px;font-family:monospace;font-size:12px;z-index:10;pointer-events:none;white-space:nowrap; }
+canvas { display:block; }
+#webcam-container { position:absolute;top:60px;left:10px;z-index:50;border:2px solid #0f0;border-radius:8px;overflow:hidden;opacity:0.8; }
+#webcam-container video { width:160px;height:120px;transform:scaleX(-1); }
+#webcam-container canvas { width:160px;height:120px;position:absolute;top:0;left:0;transform:scaleX(-1); }
+#body-status { position:absolute;top:185px;left:10px;z-index:50;background:rgba(0,0,0,0.7);color:#0f0;padding:6px 10px;border-radius:6px;font-family:monospace;font-size:11px;max-width:220px; }
+#calibration-screen { position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:monospace; }
+#calibration-screen h2 { font-size:28px;margin-bottom:10px; }
+#calibration-screen p { font-size:16px;color:#aaa;margin:5px; }
+#cal-timer { font-size:64px;color:#0f0;margin:20px; }
+#cal-status { font-size:14px;color:#ff0; }
+#virtual-panel { position:absolute;bottom:10px;left:50%;transform:translateX(-50%);z-index:40;pointer-events:none; }
+#virtual-panel canvas { border-radius:12px;background:rgba(0,0,0,0.5); }
+</style>
+</head>
+<body>
+
+<div id="calibration-screen">
+<h2>CALIBRACION - MODO PANEL</h2>
+<p>Sientate frente a la camara</p>
+<p>Manos al frente a la altura del pecho, como agarrando palancas</p>
+<div id="cal-timer">3</div>
+<div id="cal-status">Esperando camara...</div>
+<button id="cal-skip" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;background:#333;color:#fff;border:1px solid #666;border-radius:8px;">Saltar (usar teclado)</button>
+</div>
+
+<div id="info">Velocidad: <span id="spd">0</span> km/h &nbsp;|&nbsp; Altitud: <span id="alt">0</span> m</div>
+<div style="position:absolute;top:12px;right:16px;z-index:20;pointer-events:none;color:#ffffff;font-family:Arial Black,Arial;font-size:20px;font-weight:900;letter-spacing:2px;text-shadow:0 0 6px rgba(0,0,0,0.8);">OPTIMEN</div>
+
+<div id="crash-screen" style="display:none;position:absolute;inset:0;background:rgba(180,0,0,0.75);z-index:100;flex-direction:column;align-items:center;justify-content:center;">
+<div style="font-size:64px;">&#128165;</div>
+<div style="color:#fff;font-family:monospace;font-size:32px;font-weight:bold;margin:10px 0;">CRASH</div>
+<div style="color:#ffcccc;font-family:monospace;font-size:16px;margin-bottom:24px;">El avion fue destruido</div>
+<button onclick="location.reload()" style="background:#fff;color:#cc0000;border:none;border-radius:10px;padding:12px 32px;font-size:18px;font-weight:bold;cursor:pointer;">Reiniciar</button>
+</div>
+
+<button onclick="location.reload()" style="position:absolute;top:12px;left:16px;z-index:30;background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:8px;padding:6px 14px;font-family:monospace;font-size:13px;cursor:pointer;">Reiniciar</button>
+<div id="hint">Izq↑↓=pitch | Izq←→=giro | Der↑↓=potencia | V=vista</div>
+<div id="fuel" style="position:absolute;top:52px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#0f0;padding:6px 12px;border-radius:8px;font-family:monospace;z-index:20">Combustible: 100%</div>
+<div id="msg" style="position:absolute;top:85px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#ff0;padding:6px 12px;border-radius:8px;font-family:monospace;z-index:20"></div>
+
+<div id="webcam-container">
+<video id="webcam" autoplay playsinline></video>
+<canvas id="pose-canvas" width="160" height="120"></canvas>
+</div>
+<div id="body-status">Panel: Calibrando...</div>
+
+<div id="virtual-panel"><canvas id="panel-canvas" width="320" height="140"></canvas></div>
+
+<canvas id="radar" width="180" height="180" style="position:absolute;right:15px;bottom:15px;border:2px solid #0f0;border-radius:50%;background:rgba(0,0,0,.65);z-index:20"></canvas>
+<canvas id="gauges" width="260" height="180" style="position:absolute;left:15px;bottom:220px;background:rgba(0,0,0,.65);border-radius:12px;z-index:25"></canvas>
+<canvas id="c"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+<script>
+// ====== PANEL VIRTUAL - CONTROL POR POSE v1 ======
+var bodyControl = {roll:0, pitch:0, throttle:0, detected:false};
+var currentThrottle = 0;
+var DEAD_ZONE_Y = 20;
+var DEAD_ZONE_X = 25;
+var THROTTLE_RATE = 0.015;
+
+var calibration = {done:false, leftWristX:0, leftWristY:0, rightWristX:0, rightWristY:0};
+var calSamples = [];
+var poseDetector = null;
+var webcamVideo = document.getElementById('webcam');
+var poseCanvas = document.getElementById('pose-canvas');
+var poseCtx = poseCanvas.getContext('2d');
+var bodyStatus = document.getElementById('body-status');
+var calScreen = document.getElementById('calibration-screen');
+var calTimer = document.getElementById('cal-timer');
+var calStatus = document.getElementById('cal-status');
+var panelCanvas = document.getElementById('panel-canvas');
+var panelCtx = panelCanvas.getContext('2d');
+
+document.getElementById('cal-skip').addEventListener('click', function(){
+    calibration.done = true;
+    calScreen.style.display = 'none';
+});
+
+async function setupCamera(){
+    var stream = await navigator.mediaDevices.getUserMedia({video:{width:320, height:240, facingMode:'user'}});
+    webcamVideo.srcObject = stream;
+    return new Promise(function(resolve){ webcamVideo.onloadedmetadata = function(){ resolve(); }; });
+}
+
+async function setupPoseDetection(){
+    await setupCamera();
+    calStatus.textContent = 'Camara lista. Manos al frente!';
+    var model = poseDetection.SupportedModels.MoveNet;
+    var detectorConfig = {modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING};
+    poseDetector = await poseDetection.createDetector(model, detectorConfig);
+    var calStart = Date.now();
+    calStatus.textContent = 'Manos al frente como agarrando palancas...';
+    detectPose(calStart);
+}
+
+async function detectPose(calStart){
+    if(!poseDetector) return;
+    try {
+        var poses = await poseDetector.estimatePoses(webcamVideo);
+        if(poses.length > 0 && poses[0].keypoints){
+            var kp = poses[0].keypoints;
+            var leftShoulder = kp[5];
+            var rightShoulder = kp[6];
+            var leftWrist = kp[9];
+            var rightWrist = kp[10];
+
+            if(!calibration.done){
+                var elapsed = (Date.now() - calStart) / 1000;
+                var remaining = Math.max(0, 3 - Math.floor(elapsed));
+                calTimer.textContent = remaining;
+
+                if(leftWrist.score > 0.3 && rightWrist.score > 0.3 && leftShoulder.score > 0.3){
+                    calStatus.textContent = 'Te veo! Manten las manos quietas...';
+                    calStatus.style.color = '#0f0';
+                    if(elapsed >= 2){
+                        calSamples.push({
+                            lx: leftWrist.x, ly: leftWrist.y,
+                            rx: rightWrist.x, ry: rightWrist.y
+                        });
+                    }
+                    if(elapsed >= 3 && calSamples.length >= 5){
+                        var sum = {lx:0,ly:0,rx:0,ry:0};
+                        for(var i=0; i<calSamples.length; i++){
+                            sum.lx += calSamples[i].lx;
+                            sum.ly += calSamples[i].ly;
+                            sum.rx += calSamples[i].rx;
+                            sum.ry += calSamples[i].ry;
+                        }
+                        calibration.leftWristX = sum.lx / calSamples.length;
+                        calibration.leftWristY = sum.ly / calSamples.length;
+                        calibration.rightWristX = sum.rx / calSamples.length;
+                        calibration.rightWristY = sum.ry / calSamples.length;
+                        calibration.done = true;
+                        calScreen.style.display = 'none';
+                    }
+                } else {
+                    calStatus.textContent = 'No veo tus manos... acercalas';
+                    calStatus.style.color = '#f44';
+                }
+            }
+
+            if(calibration.done && leftWrist.score > 0.3 && rightWrist.score > 0.3){
+                bodyControl.detected = true;
+
+                var rightDiffY = calibration.rightWristY - rightWrist.y;
+                if(rightDiffY > DEAD_ZONE_Y){
+                    currentThrottle = Math.min(1, currentThrottle + THROTTLE_RATE);
+                } else if(rightDiffY < -DEAD_ZONE_Y){
+                    currentThrottle = Math.max(0, currentThrottle - THROTTLE_RATE);
+                }
+                bodyControl.throttle = currentThrottle;
+
+                var leftDiffY = calibration.leftWristY - leftWrist.y;
+                if(leftDiffY > DEAD_ZONE_Y){
+                    bodyControl.pitch = -Math.min(0.7, (leftDiffY - DEAD_ZONE_Y) / 60);
+                } else if(leftDiffY < -DEAD_ZONE_Y){
+                    bodyControl.pitch = Math.min(0.7, (-leftDiffY - DEAD_ZONE_Y) / 60);
+                } else {
+                    bodyControl.pitch = 0;
+                }
+
+                var leftDiffX = leftWrist.x - calibration.leftWristX;
+                if(Math.abs(leftDiffX) > DEAD_ZONE_X){
+                    bodyControl.roll = Math.max(-1, Math.min(1, (leftDiffX - Math.sign(leftDiffX)*DEAD_ZONE_X) / 50));
+                } else {
+                    bodyControl.roll = 0;
+                }
+
+                bodyStatus.innerHTML = 'PANEL ACTIVO<br>Stick X:'+bodyControl.roll.toFixed(2)+
+                    ' | Stick Y:'+bodyControl.pitch.toFixed(2)+
+                    '<br>Throttle:'+Math.round(currentThrottle*100)+'%';
+                bodyStatus.style.color = '#0f0';
+            } else if(calibration.done){
+                bodyControl.detected = false;
+                bodyStatus.textContent = 'No veo tus manos';
+                bodyStatus.style.color = '#f44';
+            }
+
+            poseCtx.clearRect(0,0,160,120);
+            poseCtx.fillStyle = '#0f0';
+            for(var i=0; i<kp.length; i++){
+                if(kp[i].score > 0.3){
+                    poseCtx.beginPath();
+                    poseCtx.arc(kp[i].x/2, kp[i].y/2, 3, 0, 6.28);
+                    poseCtx.fill();
+                }
+            }
+            if(leftShoulder.score>0.3 && leftWrist.score>0.3){
+                poseCtx.strokeStyle='#ff0';poseCtx.lineWidth=2;
+                poseCtx.beginPath();poseCtx.moveTo(leftShoulder.x/2,leftShoulder.y/2);
+                poseCtx.lineTo(leftWrist.x/2,leftWrist.y/2);poseCtx.stroke();
+            }
+            if(rightShoulder.score>0.3 && rightWrist.score>0.3){
+                poseCtx.strokeStyle='#0ff';poseCtx.lineWidth=2;
+                poseCtx.beginPath();poseCtx.moveTo(rightShoulder.x/2,rightShoulder.y/2);
+                poseCtx.lineTo(rightWrist.x/2,rightWrist.y/2);poseCtx.stroke();
+            }
+            drawVirtualPanel();
+        }
+    } catch(e){}
+    requestAnimationFrame(function(){ detectPose(calStart); });
+}
+
+function drawVirtualPanel(){
+    var ctx = panelCtx;
+    ctx.clearRect(0,0,320,140);
+    ctx.fillStyle = 'rgba(20,30,40,0.8)';
+    ctx.fillRect(0,0,320,140);
+    ctx.strokeStyle = '#444';
+    ctx.strokeRect(0,0,320,140);
+
+    var stickCX = 90, stickCY = 70, stickR = 50;
+    ctx.beginPath();ctx.arc(stickCX,stickCY,stickR,0,Math.PI*2);
+    ctx.strokeStyle='#555';ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(stickCX-stickR,stickCY);ctx.lineTo(stickCX+stickR,stickCY);ctx.strokeStyle='#333';ctx.stroke();
+    ctx.beginPath();ctx.moveTo(stickCX,stickCY-stickR);ctx.lineTo(stickCX,stickCY+stickR);ctx.stroke();
+    var sx = stickCX + bodyControl.roll * stickR * 0.8;
+    var sy = stickCY + bodyControl.pitch * stickR * 0.8;
+    ctx.beginPath();ctx.arc(sx,sy,10,0,Math.PI*2);
+    ctx.fillStyle = bodyControl.detected ? '#00ff88' : '#666';ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#aaa';ctx.font='10px monospace';
+    ctx.fillText('STICK',70,130);
+
+    var thrX = 220, thrY = 15, thrW = 20, thrH = 100;
+    ctx.strokeStyle='#555';ctx.lineWidth=2;
+    ctx.strokeRect(thrX, thrY, thrW, thrH);
+    var fillH = currentThrottle * thrH;
+    var thrColor = currentThrottle < 0.5 ? '#00cc44' : currentThrottle < 0.8 ? '#ccaa00' : '#cc3300';
+    ctx.fillStyle = thrColor;
+    ctx.fillRect(thrX, thrY + thrH - fillH, thrW, fillH);
+    var handleY = thrY + thrH - fillH - 4;
+    ctx.fillStyle = '#ddd';
+    ctx.fillRect(thrX-4, handleY, thrW+8, 8);
+    ctx.strokeStyle='#fff';ctx.strokeRect(thrX-4,handleY,thrW+8,8);
+    ctx.fillStyle='#aaa';ctx.font='10px monospace';
+    ctx.fillText('THROTTLE',205,130);
+    ctx.fillStyle='#fff';ctx.font='12px monospace';
+    ctx.fillText(Math.round(currentThrottle*100)+'%',218,thrY+thrH+15);
+
+    ctx.fillStyle = bodyControl.detected ? '#0f0' : '#f44';
+    ctx.beginPath();ctx.arc(300,15,6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#aaa';ctx.font='9px monospace';
+    ctx.fillText(bodyControl.detected?'ON':'OFF',292,30);
+}
+
+setupPoseDetection().catch(function(e){
+    calStatus.textContent = 'Error: '+e.message;
+    calStatus.style.color = '#f44';
+});
+// ====== SIMULADOR 3D ======
+window.addEventListener('load', function(){
+var W=window.innerWidth, H=window.innerHeight;
+var canvas=document.getElementById('c');
+var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true});
+renderer.shadowMap.enabled=true;
+renderer.setSize(W,H);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.15;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.physicallyCorrectLights=true;
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+
+var scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87CEEB);
+scene.fog=new THREE.Fog(0x87CEEB,400,1100);
+var camera=new THREE.PerspectiveCamera(65,W/H,0.1,2000);
+
+var sun=new THREE.DirectionalLight(0xfff5e0,1.2);
+sun.castShadow=true;
+sun.position.set(80,120,60);
+sun.shadow.mapSize.width=2048;
+sun.shadow.mapSize.height=2048;
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xaad4f5,0.8));
+
+var terrainGeo=new THREE.PlaneGeometry(4000,4000,200,200);
+terrainGeo.rotateX(-Math.PI/2);
+var pos=terrainGeo.attributes.position;
+
+function noise(x,z,freq,amp){
+    return Math.sin(x*freq)*Math.cos(z*freq*0.8)*amp+Math.sin(x*freq*2.1+1)*Math.cos(z*freq*1.7)*amp*0.5+Math.sin(x*freq*0.5+2)*Math.cos(z*freq*0.4)*amp*1.5;
+}
+
+var lakeZones=[{x:-350,z:-250,rx:70,rz:45},{x:350,z:-250,rx:65,rz:42},{x:-900,z:-700,rx:80,rz:55},{x:900,z:-700,rx:75,rz:50},{x:0,z:-550,rx:50,rz:35},{x:-500,z:-400,rx:40,rz:28},{x:500,z:-400,rx:45,rz:30}];
+
+function inLake(wx,wz){for(var i=0;i<lakeZones.length;i++){var l=lakeZones[i];var dx=(wx-l.x)/l.rx,dz=(wz-l.z)/l.rz;if(dx*dx+dz*dz<1.0)return true;}return false;}
+function lakeFade(wx,wz){var minD=99;for(var i=0;i<lakeZones.length;i++){var l=lakeZones[i];var dx=(wx-l.x)/l.rx,dz=(wz-l.z)/l.rz;minD=Math.min(minD,dx*dx+dz*dz);}return minD;}
+
+var mountains=[{x:-1100,z:-500,h:130,r:230},{x:-1200,z:-700,h:100,r:190},{x:-1000,z:-300,h:90,r:170},{x:1100,z:-500,h:120,r:220},{x:1200,z:-700,h:95,r:185},{x:1000,z:-300,h:85,r:165},{x:-400,z:-1400,h:110,r:210},{x:0,z:-1500,h:95,r:200},{x:400,z:-1400,h:105,r:205},{x:-1100,z:-100,h:80,r:160},{x:1100,z:-100,h:75,r:155}];
+
+function mountainHeight(wx,wz){var h=0;for(var i=0;i<mountains.length;i++){var m=mountains[i];var dx=wx-m.x,dz=wz-m.z;var d=Math.sqrt(dx*dx+dz*dz);if(d<m.r){var t=1-d/m.r;h+=m.h*Math.pow(t,1.4)*(0.85+0.15*Math.sin(dx*0.05)*Math.cos(dz*0.05));}}return h;}
+
+for(var i=0;i<pos.count;i++){
+    var wx=pos.getX(i),wz=pos.getZ(i);
+    var d=lakeFade(wx,wz);
+    if(d<1.0){var blend=Math.max(0,1-d);pos.setY(i,-1-blend*2);}
+    else{
+        var h=noise(wx,wz,0.008,8)+noise(wx,wz,0.02,3);
+        h+=mountainHeight(wx,wz);
+        if(d<1.5){var blend2=(d-1.0)/0.5;h=h*blend2+(-1)*(1-blend2);}
+        var runwayFlat=Math.abs(wx)<200&&wz>-250&&wz<150;
+        var ap0Flat=Math.abs(wx)<250&&wz>-220&&wz<220;
+        var city1Flat=Math.abs(wx+700)<280&&wz>-1280&&wz<-880;
+        var city2Flat=Math.abs(wx-700)<280&&wz>-1280&&wz<-880;
+        if(runwayFlat||ap0Flat||city1Flat||city2Flat){h=0;}
+        pos.setY(i,h-1);
+    }
+}
+terrainGeo.computeVertexNormals();
+
+var terrainColors=[];
+for(var i=0;i<pos.count;i++){
+    var y=pos.getY(i),wx=pos.getX(i),wz=pos.getZ(i);
+    var r,g,b;
+    if(inLake(wx,wz)){r=0.1;g=0.47;b=0.8;}
+    else if(y>55){r=0.85;g=0.82;b=0.78;}
+    else if(y>25){r=0.45;g=0.38;b=0.28;}
+    else if(y>8){r=0.32;g=0.55;b=0.22;}
+    else{r=0.30;g=0.62;b=0.18;}
+    terrainColors.push(r,g,b);
+}
+terrainGeo.setAttribute('color',new THREE.Float32BufferAttribute(terrainColors,3));
+var terrainMat=new THREE.MeshPhongMaterial({vertexColors:true,shininess:8});
+var terrainMesh=new THREE.Mesh(terrainGeo,terrainMat);
+terrainMesh.receiveShadow=true;
+scene.add(terrainMesh);
+
+for(var i=0;i<lakeZones.length;i++){
+    var l=lakeZones[i];
+    var lake=new THREE.Mesh(new THREE.CircleGeometry(1,48),new THREE.MeshPhongMaterial({color:0x1a7acc,shininess:120,transparent:true,opacity:0.82}));
+    lake.rotation.x=-Math.PI/2;lake.scale.set(l.rx,1,l.rz);lake.position.set(l.x,-1.5,l.z);scene.add(lake);
+}
+
+var runway=new THREE.Mesh(new THREE.PlaneGeometry(12,160),new THREE.MeshPhongMaterial({color:0x555555}));
+runway.rotation.x=-Math.PI/2;runway.position.set(0,-0.9,-60);scene.add(runway);
+
+function makeTree(x,z){var g=new THREE.Group();var trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.4,2,6),new THREE.MeshPhongMaterial({color:0x7a4a1a}));trunk.position.y=0;g.add(trunk);var ys=[2.5,3.8,4.8];var cs=[0x2d7a1a,0x3a9a22,0x4ab830];for(var i=0;i<3;i++){var cone=new THREE.Mesh(new THREE.ConeGeometry(2.5-i*0.5,2.2,7),new THREE.MeshPhongMaterial({color:cs[i]}));cone.position.y=ys[i];g.add(cone);}g.position.set(x,-1,z);scene.add(g);}
+function isLakePos(x,z){for(var i=0;i<lakeZones.length;i++){var l=lakeZones[i];var dx=(x-l.x)/l.rx,dz=(z-l.z)/l.rz;if(dx*dx+dz*dz<1.4)return true;}return false;}
+
+var rawTrees=[[-200,-80],[-220,-120],[-180,-100],[-240,-60],[200,-80],[220,-120],[180,-100],[240,-60],[-150,80],[-170,100],[150,80],[170,100],[-300,-300],[-320,-280],[-280,-320],[-340,-260],[300,-300],[320,-280],[280,-320],[340,-260],[-150,-450],[-130,-480],[150,-450],[130,-480],[-400,-500],[-420,-480],[400,-500],[420,-480],[-200,-650],[-180,-700],[200,-650],[180,-700],[-50,-600],[-80,-620],[50,-600],[80,-620],[-500,-300],[-520,-280],[500,-300],[520,-280],[-600,-200],[-580,-220],[600,-200],[580,-220],[-400,-750],[-380,-780],[400,-750],[380,-780]];
+for(var i=0;i<rawTrees.length;i++){if(!isLakePos(rawTrees[i][0],rawTrees[i][1]))makeTree(rawTrees[i][0],rawTrees[i][1]);}
+
+function makeHangar(x,z,w,d,h,color){var g=new THREE.Group();var body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshPhongMaterial({color:color}));body.position.y=h/2;g.add(body);var roof=new THREE.Mesh(new THREE.CylinderGeometry(w/2,w/2,d,12,1,false,0,Math.PI),new THREE.MeshPhongMaterial({color:0xaaaaaa}));roof.rotation.z=Math.PI/2;roof.rotation.y=Math.PI/2;roof.position.y=h;g.add(roof);g.position.set(x,-1,z);scene.add(g);return{x:x,z:z,w:w,d:d,h:h+w/2};}
+function makeAirport(ax,az,solid){
+    var rw=new THREE.Mesh(new THREE.PlaneGeometry(20,300),new THREE.MeshPhongMaterial({color:0x444444}));
+    rw.rotation.x=-Math.PI/2;rw.position.set(ax,-0.85,az);scene.add(rw);
+    for(var i=0;i<10;i++){var mk=new THREE.Mesh(new THREE.PlaneGeometry(1.5,18),new THREE.MeshPhongMaterial({color:0xffffff}));mk.rotation.x=-Math.PI/2;mk.position.set(ax,-0.84,az-120+i*26);scene.add(mk);}
+    var tb=new THREE.Mesh(new THREE.BoxGeometry(6,30,6),new THREE.MeshPhongMaterial({color:0xdddddd}));tb.position.set(ax+25,14,az);scene.add(tb);
+    var tt=new THREE.Mesh(new THREE.BoxGeometry(10,6,10),new THREE.MeshPhongMaterial({color:0x4488cc}));tt.position.set(ax+25,32,az);scene.add(tt);
+    solid.push(makeHangar(ax-35,az-30,28,22,12,0xbbbbaa));
+    solid.push(makeHangar(ax-35,az+30,28,22,12,0xbbbbaa));
+    solid.push({x:ax,z:az,w:20,d:300,h:0.5});
+    solid.push({x:ax+25,z:az,w:6,d:6,h:36});
+}
+
+var solidBuildings=[];
+makeAirport(0,0,solidBuildings);
+solidBuildings.push({x:0,z:-60,w:12,d:160,h:0.5});
+
+var CX=-700,CZ=-1100;
+makeAirport(CX+200,CZ,solidBuildings);
+
+var buildingColors=[0x8899aa,0x99aabb,0x7788aa,0xaabbcc,0x667799,0x556688,0x99aabb];
+function makeBuilding(x,z,w,d,h){
+    var g=new THREE.Group();
+    var body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshPhongMaterial({color:buildingColors[Math.floor(Math.random()*buildingColors.length)]}));
+    body.position.y=h/2;g.add(body);
+    var wc=document.createElement('canvas');wc.width=64;wc.height=128;
+    var wctx=wc.getContext('2d');wctx.fillStyle='#334455';wctx.fillRect(0,0,64,128);
+    for(var wy=0;wy<8;wy++)for(var wx2=0;wx2<4;wx2++){wctx.fillStyle=Math.random()>0.3?'#ffee88':'#223344';wctx.fillRect(4+wx2*15,4+wy*15,10,10);}
+    var wmat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(wc)});
+    for(var side=0;side<4;side++){var wp=new THREE.Mesh(new THREE.PlaneGeometry(w,h),wmat);wp.position.y=h/2;
+        if(side===0){wp.position.z=d/2+0.1;}
+        if(side===1){wp.position.z=-d/2-0.1;wp.rotation.y=Math.PI;}
+        if(side===2){wp.position.x=w/2+0.1;wp.rotation.y=Math.PI/2;}
+        if(side===3){wp.position.x=-w/2-0.1;wp.rotation.y=-Math.PI/2;}
+        g.add(wp);}
+    var roof=new THREE.Mesh(new THREE.BoxGeometry(w+0.5,1,d+0.5),new THREE.MeshPhongMaterial({color:0x445566}));
+    roof.position.y=h+0.5;g.add(roof);
+    g.position.set(x,-1,z);scene.add(g);
+    solidBuildings.push({x:x,z:z,w:w,d:d,h:h+2});
+}
+
+var blockOffsets=[[10,10,14,14,25],[10,35,14,14,18],[10,60,14,14,30],[35,10,14,14,20],[35,35,14,14,35],[35,60,14,14,15],[-15,10,14,14,22],[-15,35,14,14,28],[-15,60,14,14,18],[-40,10,14,14,32],[-40,35,14,14,20],[-40,60,14,14,25],[10,-20,14,14,18],[35,-20,14,14,24],[-15,-20,14,14,30],[-40,-20,14,14,16],[10,-50,14,14,28],[35,-50,14,14,20],[-15,-50,14,14,22],[-40,-50,14,14,35],[60,25,20,20,45],[60,-10,18,18,38],[60,55,16,16,30],[-65,25,20,20,40],[-65,-10,18,18,35],[-65,55,16,16,28]];
+for(var i=0;i<blockOffsets.length;i++){var b=blockOffsets[i];makeBuilding(CX+b[0],CZ+b[1],b[2],b[3],b[4]);}
+
+var streetMat=new THREE.MeshPhongMaterial({color:0x555566});
+var streets1=[[CX,CZ,120,8],[CX,CZ,8,160]];
+for(var i=0;i<streets1.length;i++){var s=new THREE.Mesh(new THREE.PlaneGeometry(streets1[i][2],streets1[i][3]),streetMat);s.rotation.x=-Math.PI/2;s.position.set(streets1[i][0],-0.88,streets1[i][1]);scene.add(s);}
+
+var CX2=700,CZ2=-1100;
+makeAirport(CX2-200,CZ2,solidBuildings);
+
+var b2Offsets=[[10,10,14,14,28],[10,35,14,14,20],[10,60,14,14,33],[35,10,14,14,18],[35,35,14,14,38],[35,60,14,14,22],[-15,10,14,14,25],[-15,35,14,14,15],[-15,60,14,14,30],[-40,10,14,14,35],[-40,35,14,14,22],[-40,60,14,14,18],[10,-20,14,14,20],[35,-20,14,14,28],[-15,-20,14,14,25],[-40,-20,14,14,32],[60,25,20,20,42],[60,-10,18,18,35],[-65,25,20,20,38],[-65,-10,18,18,30]];
+for(var i=0;i<b2Offsets.length;i++){var b=b2Offsets[i];makeBuilding(CX2+b[0],CZ2+b[1],b[2],b[3],b[4]);}
+
+var streets2=[[CX2,CZ2,120,8],[CX2,CZ2,8,160]];
+for(var i=0;i<streets2.length;i++){var s=new THREE.Mesh(new THREE.PlaneGeometry(streets2[i][2],streets2[i][3]),streetMat);s.rotation.x=-Math.PI/2;s.position.set(streets2[i][0],-0.88,streets2[i][1]);scene.add(s);}
+
+window._solidBuildings=solidBuildings;
+
+for(var i=0;i<80;i++){var cl=new THREE.Group();for(var j=0;j<4;j++){var p=new THREE.Mesh(new THREE.SphereGeometry(12+Math.random()*10,12,12),new THREE.MeshPhongMaterial({color:0xffffff,transparent:true,opacity:0.9}));p.position.set((Math.random()-0.5)*25,Math.random()*8,(Math.random()-0.5)*25);cl.add(p);}cl.position.set((Math.random()-0.5)*3500,120+Math.random()*180,-1500+Math.random()*2500);scene.add(cl);}
+
+// ====== AVION GLB ======
+var plane=new THREE.Group();
+plane.position.set(0,0.5,0);
+scene.add(plane);
+var propeller=null;
+
+var loader=new THREE.GLTFLoader();
+loader.load('HalconII.glb',function(gltf){
+    var model=gltf.scene;
+    model.scale.set(1.5,1.5,1.5);
+    model.rotation.y=Math.PI;
+    plane.add(model);
+    model.traverse(function(child){
+        if(child.name&&child.name.toLowerCase().indexOf('propeller')>=0){propeller=child;}
+    });
+});
+
+// ====== ESTADO Y CONTROLES ======
+var camView=0;
+var state={speed:0,altitude:0.5,pitch:0,yaw:0,throttle:0,fuel:100,crashed:false,prevAlt:0.5};
+
+var keys={};
+window.addEventListener('keydown',function(e){keys[e.key]=true;if(e.key==='v'||e.key==='V'){camView=camView===0?1:0;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0)e.preventDefault();});
+window.addEventListener('keyup',function(e){keys[e.key]=false;});
+
+var spdEl=document.getElementById('spd');
+var altEl=document.getElementById('alt');
+var fuelEl=document.getElementById('fuel');
+var msgEl=document.getElementById('msg');
+var radar=document.getElementById('radar');
+var rctx=radar.getContext('2d');
+var gauges=document.getElementById('gauges');
+var gctx=gauges?gauges.getContext('2d'):null;
+var clock=new THREE.Clock();
+
+function getTerrainHeight(wx,wz){
+    for(var i=0;i<lakeZones.length;i++){var l=lakeZones[i];var dx=(wx-l.x)/l.rx,dz=(wz-l.z)/l.rz;if(dx*dx+dz*dz<1.0)return-2.5;}
+    if(Math.abs(wx)<250&&wz>-220&&wz<220)return-1;
+    if(Math.abs(wx+700)<280&&wz>-1280&&wz<-880)return-1;
+    if(Math.abs(wx-700)<280&&wz>-1280&&wz<-880)return-1;
+    var mh=mountainHeight(wx,wz);var nh=noise(wx,wz,0.008,8)+noise(wx,wz,0.02,3);return mh+nh-1;
+}
+function animate(){
+    requestAnimationFrame(animate);
+    var dt=Math.min(clock.getDelta(),0.05);
+    if(state.crashed) return;
+
+    // === CONTROL POR WEBCAM (PANEL) ===
+    if(bodyControl.detected){
+        state.yaw += bodyControl.roll * dt * 2.2;
+        state.pitch = bodyControl.pitch * 0.5;
+        state.throttle = bodyControl.throttle;
+    }
+
+    // === CONTROL POR TECLADO ===
+    if(keys['w']||keys['W']){state.throttle=Math.min(1,state.throttle+dt*1.5);currentThrottle=state.throttle;}
+    if(keys['s']||keys['S']){state.throttle=Math.max(0,state.throttle-dt*1.5);currentThrottle=state.throttle;}
+    if(state.fuel>0){state.fuel=Math.max(0,state.fuel-state.throttle*dt*0.8);}else{state.throttle=0;}
+    if(keys['ArrowLeft'])state.yaw+=dt*1.8;
+    if(keys['ArrowRight'])state.yaw-=dt*1.8;
+    if(keys['ArrowDown'])state.pitch=Math.max(-0.45,state.pitch-dt*0.7);
+    if(keys['ArrowUp'])state.pitch=Math.min(0.40,state.pitch+dt*0.7);
+
+    // === FISICA ===
+    var targetSpeed=state.throttle*1000;
+    state.speed+=(targetSpeed-state.speed)*dt*3.5;
+    var inAir=state.altitude>1.5;
+    var liftFactor=Math.min(1,Math.max(0,state.speed/75));
+    var pitchLift=Math.sin(-state.pitch)*state.speed*0.05*liftFactor;
+    var sinkRate=2.5*(1-liftFactor)*dt;
+    state.altitude+=pitchLift*dt-sinkRate;
+
+    if(inAir&&sinkRate>0){
+        var glideForward=sinkRate*7.0;
+        var gfwd=new THREE.Vector3(0,0,-1);
+        gfwd.applyEuler(new THREE.Euler(0,state.yaw,0));
+        plane.position.addScaledVector(gfwd,glideForward);
+    }
+
+    var vertSpeed=(state.altitude-state.prevAlt)/dt;
+    state.prevAlt=state.altitude;
+
+    var groundH=getTerrainHeight(plane.position.x,plane.position.z)+1.5;
+    if(state.altitude<=groundH+0.1&&vertSpeed<-8){
+        state.crashed=true;state.speed=0;state.throttle=0;state.pitch=0;state.fuel=0;
+        var cs=document.getElementById('crash-screen');if(cs)cs.style.display='flex';
+    }
+    state.altitude=Math.max(groundH,state.altitude);
+
+    // COLISION EDIFICIOS
+    if(window._solidBuildings){
+        for(var i=0;i<window._solidBuildings.length;i++){
+            var b=window._solidBuildings[i];
+            var dx=Math.abs(plane.position.x-b.x);
+            var dz=Math.abs(plane.position.z-b.z);
+            var hw=(b.w||15)/2+2,hd=(b.d||15)/2+2;
+            if(dx<hw&&dz<hd){
+                var topH=b.h||20;
+                if(state.altitude<topH+0.5){
+                    if(topH<2){
+                        if(vertSpeed<-7){state.crashed=true;state.speed=0;state.throttle=0;state.fuel=0;var cs=document.getElementById('crash-screen');if(cs)cs.style.display='flex';}
+                        else{state.altitude=topH+0.5;if(vertSpeed<-3){if(msgEl)msgEl.textContent='ATERRIZAJE DURO';state.speed*=0.75;}else{if(msgEl)msgEl.textContent='ATERRIZAJE SUAVE';}if(state.altitude<=1.5){state.speed=Math.max(0,state.speed-dt*120);}}
+                    }else{
+                        if(state.speed>80){state.crashed=true;state.speed=0;state.throttle=0;state.pitch=0;state.fuel=0;var cs=document.getElementById('crash-screen');if(cs)cs.style.display='flex';}
+                        else{state.altitude=topH+0.5;state.speed*=0.2;state.pitch=0;}
+                    }
+                }
+            }
+        }
+    }
+
+    // MOVIMIENTO
+    var forward=new THREE.Vector3(0,0,-1);
+    forward.applyEuler(new THREE.Euler(0,state.yaw,0));
+    plane.position.addScaledVector(forward,state.speed*dt*0.014);
+    plane.position.y=state.altitude;
+
+    var visualRoll=keys['ArrowLeft']?0.22:keys['ArrowRight']?-0.22:bodyControl.detected?-bodyControl.roll*0.35:0;
+    plane.rotation.set(-state.pitch,state.yaw,visualRoll,'YXZ');
+
+    // HELICE
+    if(propeller){
+        propeller.rotateOnAxis(new THREE.Vector3(0,0,1), dt*(5+state.throttle*40));
+    }
+
+    // CAMARA
+    if(camView===1){
+        var cockpitPos=plane.position.clone().add(new THREE.Vector3(0,2.2,0));
+        camera.position.lerp(cockpitPos,0.15);
+        var lookDir=new THREE.Vector3(0,0,-20);
+        lookDir.applyEuler(new THREE.Euler(0,state.yaw,0));
+        camera.lookAt(plane.position.clone().add(lookDir).add(new THREE.Vector3(0,1.5,0)));
+    } else {
+        var back=forward.clone().multiplyScalar(-16);
+        var camPos=plane.position.clone().add(back).add(new THREE.Vector3(0,5,0));
+        camera.position.lerp(camPos,0.08);
+        camera.lookAt(plane.position.clone().add(new THREE.Vector3(0,1.5,0)));
+    }
+    camera.fov=65+state.speed*0.015;
+    camera.updateProjectionMatrix();
+
+    // HUD
+    spdEl.textContent=Math.round(state.speed);
+    altEl.textContent=Math.round(Math.max(0,(state.altitude-0.5)*10));
+
+    // REPOSTAJE
+    var airports=[{x:0,z:0},{x:-500,z:-1100},{x:500,z:-1100}];
+    var rep=false;
+    for(var i=0;i<airports.length;i++){var a=airports[i];var d2=Math.hypot(plane.position.x-a.x,plane.position.z-a.z);if(d2<140&&state.speed<5&&state.altitude<3){state.fuel=Math.min(100,state.fuel+25*dt);rep=true;}}
+    fuelEl.textContent='Combustible: '+Math.round(state.fuel)+'%';
+    if(rep){msgEl.textContent='REPOSTANDO...';}
+    else if(state.fuel<15){msgEl.textContent='COMBUSTIBLE BAJO';}
+    else if(state.fuel<=0&&state.altitude>3){msgEl.textContent='PLANEANDO';}
+    else{msgEl.textContent='';}
+
+    // RADAR
+    rctx.clearRect(0,0,180,180);
+    rctx.strokeStyle='#00ff66';
+    rctx.beginPath();rctx.arc(90,90,85,0,Math.PI*2);rctx.stroke();
+    var scale=0.05;
+    function mark(x,z,c){var mdx=(x-plane.position.x)*scale;var mdz=(z-plane.position.z)*scale;if(Math.hypot(mdx,mdz)<80){rctx.fillStyle=c;rctx.beginPath();rctx.arc(90+mdx,90+mdz,4,0,6.28);rctx.fill();}}
+    mark(0,0,'yellow');mark(-500,-1100,'yellow');mark(500,-1100,'yellow');
+    rctx.fillStyle='red';rctx.beginPath();rctx.arc(90,90,5,0,6.28);rctx.fill();
+
+    // GAUGES
+    if(gctx){
+        gctx.clearRect(0,0,260,180);
+        gctx.strokeStyle='white';gctx.fillStyle='white';
+        gctx.beginPath();gctx.arc(70,75,45,0,Math.PI*2);gctx.stroke();
+        gctx.fillText('VEL',58,20);
+        var sp=Math.min(800,state.speed||0);
+        var ang=(-140+(sp/800)*280)*Math.PI/180;
+        gctx.beginPath();gctx.moveTo(70,75);gctx.lineTo(70+35*Math.cos(ang),75+35*Math.sin(ang));gctx.stroke();
+        gctx.fillText(Math.round(sp)+' km/h',40,132);
+        gctx.strokeRect(170,20,25,95);
+        var alt2=Math.max(0,Math.min(1000,state.altitude||0));
+        var yg=115-(alt2/1000)*95;
+        gctx.fillRect(170,yg,25,4);
+        gctx.fillText('ALT',165,15);
+        gctx.fillText(Math.round(alt2)+'m',150,132);
+        var fuel=Math.max(0,Math.min(100,state.fuel));
+        gctx.fillStyle='white';gctx.fillText('FUEL',20,160);
+        gctx.strokeRect(60,150,120,12);
+        var fw=(fuel/100)*120;
+        if(fuel>50)gctx.fillStyle='#00ff66';else if(fuel>20)gctx.fillStyle='#ffcc00';else gctx.fillStyle='#ff4444';
+        gctx.fillRect(60,150,fw,12);
+        gctx.fillStyle='white';gctx.fillText(Math.round(fuel)+'%',190,160);
+    }
+
+    renderer.render(scene,camera);
+}
+animate();
+});
+</script>
+</body>
+</html>
