@@ -173,7 +173,7 @@ async function detectPose(calStart){
                     bodyControl.pitch = 0;
                 }
 
-                var leftDiffX = calibration.leftWristX - leftWrist.x;
+                var leftDiffX = leftWrist.x - calibration.leftWristX;
                 if(leftDiffX > DEAD_ZONE_X){
                     bodyControl.roll = Math.min(1, (leftDiffX - DEAD_ZONE_X) / 50);
                 } else if(leftDiffX < -DEAD_ZONE_X){
