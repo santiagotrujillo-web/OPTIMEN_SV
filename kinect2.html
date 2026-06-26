@@ -174,11 +174,14 @@ async function detectPose(calStart){
                 }
 
                 var leftDiffX = calibration.leftWristX - leftWrist.x;
-                if(Math.abs(leftDiffX) > DEAD_ZONE_X){
-                    bodyControl.roll = Math.max(-1, Math.min(1, (leftDiffX - Math.sign(leftDiffX)*DEAD_ZONE_X) / 50));
+                if(leftDiffX > DEAD_ZONE_X){
+                    bodyControl.roll = Math.min(1, (leftDiffX - DEAD_ZONE_X) / 50);
+                } else if(leftDiffX < -DEAD_ZONE_X){
+                    bodyControl.roll = Math.max(-1, (leftDiffX + DEAD_ZONE_X) / 50);
                 } else {
                     bodyControl.roll = 0;
                 }
+
 
                 bodyStatus.innerHTML = 'PANEL ACTIVO<br>Stick X:'+bodyControl.roll.toFixed(2)+
                     ' | Stick Y:'+bodyControl.pitch.toFixed(2)+
