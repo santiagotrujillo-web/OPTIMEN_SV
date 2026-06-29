@@ -272,6 +272,7 @@ setupPoseDetection().catch(function(e){
     calStatus.style.color = '#f44';
 });
 // ====== SIMULADOR 3D ======
+var paused=false;function togglePause(){paused=!paused;var b=document.getElementById('btn-pause');b.innerHTML=paused?'&#9654;':'&#9208;';b.style.color=paused?'#0f0':'#ff0';}
 window.addEventListener('load', function(){
 var W=window.innerWidth, H=window.innerHeight;
 var canvas=document.getElementById('c');
@@ -449,6 +450,7 @@ var state={speed:0,altitude:0.5,pitch:0,yaw:0,throttle:0,fuel:100,crashed:false,
 var keys={};
 window.addEventListener('keydown',function(e){keys[e.key]=true;if(e.key==='v'||e.key==='V'){camView=camView===0?1:0;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0)e.preventDefault();});
 window.addEventListener('keyup',function(e){keys[e.key]=false;});
+document.addEventListener('fullscreenchange',function(){setTimeout(function(){var W2=window.innerWidth,H2=window.innerHeight;renderer.setSize(W2,H2);camera.aspect=W2/H2;camera.updateProjectionMatrix();},100);});
 
 var spdEl=document.getElementById('spd');
 var altEl=document.getElementById('alt');
@@ -467,7 +469,6 @@ function getTerrainHeight(wx,wz){
     if(Math.abs(wx-700)<280&&wz>-1280&&wz<-880)return-1;
     var mh=mountainHeight(wx,wz);var nh=noise(wx,wz,0.008,8)+noise(wx,wz,0.02,3);return mh+nh-1;
 }
-var paused=false;function togglePause(){paused=!paused;var b=document.getElementById('btn-pause');b.innerHTML=paused?'&#9654;':'&#9208;';b.style.color=paused?'#0f0':'#ff0';}
 
 function animate(){
     requestAnimationFrame(animate);
