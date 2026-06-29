@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Seleccionar Modo - Simulador Halcon II - Optimen</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:linear-gradient(135deg,#0a1628,#1a2a4a,#0d1f3c); min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'Segoe UI',Arial,sans-serif; color:#fff; overflow:hidden; }
+
+.container { text-align:center; max-width:700px; width:90%; }
+h1 { font-size:28px; margin-bottom:6px; text-shadow:0 0 10px rgba(0,255,100,0.3); }
+.subtitle { color:#8ab4f8; font-size:14px; margin-bottom:30px; }
+
+.modes { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; }
+.mode-card {
+    background:rgba(20,40,80,0.8);
+    border:2px solid #334;
+    border-radius:16px;
+    padding:24px 20px;
+    width:280px;
+    cursor:pointer;
+    transition:all 0.3s;
+    text-align:center;
+}
+.mode-card:hover { border-color:#0f0; transform:translateY(-4px); box-shadow:0 8px 30px rgba(0,255,0,0.15); }
+.mode-card.selected { border-color:#0f0; background:rgba(0,80,40,0.4); box-shadow:0 0 20px rgba(0,255,0,0.2); }
+.mode-icon { font-size:64px; margin-bottom:12px; display:block; }
+.mode-title { font-size:18px; font-weight:bold; color:#fff; margin-bottom:6px; }
+.mode-desc { font-size:12px; color:#aac; line-height:1.4; }
+
+/* Pantalla de instrucciones */
+#instructions {
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(5,15,30,0.97);
+    z-index:100;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:30px;
+    text-align:center;
+}
+#instructions.show { display:flex; }
+#instructions h2 { font-size:24px; color:#0f0; margin-bottom:16px; }
+.instr-icon { font-size:80px; margin-bottom:16px; }
+.instr-text { max-width:500px; font-size:14px; color:#ccd; line-height:1.7; margin-bottom:8px; }
+.instr-pos { background:rgba(0,60,30,0.4); border:1px solid #0a5; border-radius:12px; padding:16px 24px; margin:16px 0; max-width:460px; }
+.instr-pos h3 { color:#0f0; font-size:16px; margin-bottom:8px; }
+.instr-pos p { font-size:13px; color:#bdc; line-height:1.6; }
+.controls-list { text-align:left; max-width:400px; margin:12px auto; font-size:13px; color:#aab; line-height:1.8; }
+.controls-list span { color:#0f0; font-weight:bold; }
+
+.btn-play {
+    margin-top:20px;
+    padding:14px 40px;
+    font-size:18px;
+    font-weight:bold;
+    background:linear-gradient(135deg,#0a4,#072);
+    color:#fff;
+    border:2px solid #0f0;
+    border-radius:30px;
+    cursor:pointer;
+    transition:all 0.3s;
+    text-decoration:none;
+    display:inline-block;
+}
+.btn-play:hover { background:linear-gradient(135deg,#0c6,#0a4); transform:scale(1.05); box-shadow:0 0 20px rgba(0,255,0,0.4); }
+
+.btn-back {
+    margin-top:16px;
+    padding:8px 20px;
+    font-size:13px;
+    background:transparent;
+    color:#888;
+    border:1px solid #555;
+    border-radius:20px;
+    cursor:pointer;
+    transition:all 0.2s;
+}
+.btn-back:hover { color:#fff; border-color:#aaa; }
+
+.brand { position:absolute; top:16px; right:20px; font-family:'Arial Black',Arial; font-size:18px; font-weight:900; letter-spacing:2px; color:#fff; opacity:0.7; }
+.back-link { position:absolute; top:16px; left:20px; color:#888; text-decoration:none; font-size:13px; border:1px solid #555; padding:6px 12px; border-radius:8px; transition:all 0.2s; }
+.back-link:hover { color:#fff; border-color:#aaa; }
+</style>
+</head>
+<body>
+
+<div class="brand">OPTIMEN</div>
+<a href="index.html" class="back-link">← Volver al simulador</a>
+
+<div class="container">
+    <h1>CONTROL CORPORAL</h1>
+    <p class="subtitle">Elige tu modo de control con webcam</p>
+
+    <div class="modes">
+        <div class="mode-card" id="card1" onclick="selectMode(1)">
+            <span class="mode-icon">🧍</span>
+            <div class="mode-title">Brazos Extendidos</div>
+            <div class="mode-desc">Parado con brazos abiertos como avion. Mano derecha = potencia, mano izquierda = elevacion, cuerpo = giro.</div>
+        </div>
+        <div class="mode-card" id="card2" onclick="selectMode(2)">
+            <span class="mode-icon">🪑</span>
+            <div class="mode-title">Panel Virtual</div>
+            <div class="mode-desc">Sentado con manos al frente. Mano izquierda = stick (pitch + giro), mano derecha = potencia.</div>
+        </div>
+    </div>
+</div>
+<!-- Instrucciones Modo 1 -->
+<div id="instructions1" class="show-target">
+    <div id="instructions" class="instr-mode1">
+        <h2>MODO: BRAZOS EXTENDIDOS</h2>
+        <span class="instr-icon">🧍‍♂️✈️</span>
+        <div class="instr-pos">
+            <h3>📍 Posicion Inicial</h3>
+            <p>Parate frente a la camara con los <strong>brazos extendidos lateralmente</strong> a la altura de los hombros, como si fueras un avion.</p>
+        </div>
+        <div class="instr-text">
+            <strong>Controles:</strong>
+        </div>
+        <div class="controls-list">
+            <span>Mano derecha ↑</span> = Sube potencia<br>
+            <span>Mano derecha ↓</span> = Baja potencia<br>
+            <span>Mano derecha al nivel</span> = Potencia no cambia<br>
+            <span>Mano izquierda ↑</span> = Avion sube (nariz arriba)<br>
+            <span>Mano izquierda ↓</span> = Avion baja (nariz abajo)<br>
+            <span>Mano izquierda al nivel</span> = Vuelo recto<br>
+            <span>Inclinar cuerpo</span> = Girar izquierda/derecha<br>
+        </div>
+        <a href="kinect.html" class="btn-play">¡Listo, Volar!</a>
+        <br><button class="btn-back" onclick="hideInstructions()">← Cambiar modo</button>
+    </div>
+</div>
+
+<!-- Instrucciones Modo 2 -->
+<div id="instructions2" class="show-target">
+    <div id="instructions-2" class="instr-mode2">
+        <h2>MODO: PANEL VIRTUAL</h2>
+        <span class="instr-icon">🪑🎮</span>
+        <div class="instr-pos">
+            <h3>📍 Posicion Inicial</h3>
+            <p>Sientate frente a la camara con las <strong>manos al frente a la altura del pecho</strong>, como si estuvieras agarrando dos palancas invisibles. No necesitas volante, solo esa posicion.</p>
+        </div>
+        <div class="instr-text">
+            <strong>Controles:</strong>
+        </div>
+        <div class="controls-list">
+            <span>Mano derecha ↑</span> = Sube potencia<br>
+            <span>Mano derecha ↓</span> = Baja potencia<br>
+            <span>Mano izquierda ↑</span> = Nariz sube<br>
+            <span>Mano izquierda ↓</span> = Nariz baja<br>
+            <span>Mano izquierda ←</span> = Girar izquierda<br>
+            <span>Mano izquierda →</span> = Girar derecha<br>
+        </div>
+        <a href="kinect2.html" class="btn-play">¡Listo, Volar!</a>
+        <br><button class="btn-back" onclick="hideInstructions()">← Cambiar modo</button>
+    </div>
+</div>
+
+<script>
+var instr1 = document.getElementById('instructions1');
+var instr2 = document.getElementById('instructions2');
+
+// Ocultar ambos al inicio
+instr1.style.display = 'none';
+instr2.style.display = 'none';
+
+// Aplicar estilo de instrucciones a los contenedores
+instr1.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(5,15,30,0.97);z-index:100;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;';
+instr2.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(5,15,30,0.97);z-index:100;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;';
+
+function selectMode(mode){
+    // Highlight card
+    document.getElementById('card1').classList.toggle('selected', mode===1);
+    document.getElementById('card2').classList.toggle('selected', mode===2);
+
+    // Show instructions
+    if(mode === 1){
+        instr1.style.display = 'flex';
+        instr2.style.display = 'none';
+    } else {
+        instr1.style.display = 'none';
+        instr2.style.display = 'flex';
+    }
+}
+
+function hideInstructions(){
+    instr1.style.display = 'none';
+    instr2.style.display = 'none';
+    document.getElementById('card1').classList.remove('selected');
+    document.getElementById('card2').classList.remove('selected');
+}
+</script>
+
+</body>
+</html>
